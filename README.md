@@ -1,5 +1,7 @@
 # Image Text Editor
 
+🔗 **Live Demo:** [https://gihanillukkumbura.github.io/image-text-editor/](https://gihanillukkumbura.github.io/image-text-editor/)
+
 A powerful web-based image text editor that allows you to easily edit and replace text on images. Features intelligent background color detection and seamless text replacement with no coding required!
 
 ![Image Text Editor](images/Screenshot%20(155).png)
