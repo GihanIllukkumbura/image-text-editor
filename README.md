@@ -2,7 +2,7 @@
 
 A powerful web-based image text editor that allows you to easily edit and replace text on images. Features intelligent background color detection and seamless text replacement with no coding required!
 
-![Image Text Editor](<Image%20Text%20editor/images/Screenshot%20(155).png>)
+![Image Text Editor](images/Screenshot%20(155).png)
 
 ## ✨ Key Features
 
@@ -58,14 +58,14 @@ A powerful web-based image text editor that allows you to easily edit and replac
 
 ### Step 1: Load an Image
 
-![Load Image](<Image%20Text%20editor/images/Screenshot%20(156).png>)
+![Load Image](images/Screenshot%20(156).png)
 
 - Click the **Load** button or drag and drop an image
 - Supports JPG, PNG, GIF, and WebP formats
 
 ### Step 2: Select the Area to Edit
 
-![Select Area](<Image%20Text%20editor/images/Screenshot%20(157).png>)
+![Select Area](images/Screenshot%20(157).png)
 
 1. Click the **Select Area** tool (✂️)
 2. Click and drag over the text you want to replace
@@ -76,7 +76,7 @@ A powerful web-based image text editor that allows you to easily edit and replac
 
 ### Step 3: Edit the Text
 
-![Edit Text](<Image%20Text%20editor/images/Screenshot%20(158).png>)
+![Edit Text](images/Screenshot%20(158).png)
 
 - The text box automatically enters edit mode
 - Type your new text
@@ -84,7 +84,7 @@ A powerful web-based image text editor that allows you to easily edit and replac
 
 ### Step 4: Fine-tune (Optional)
 
-![Fine-tune](<Image%20Text%20editor/images/Screenshot%20(159).png>)
+![Fine-tune](images/Screenshot%20(159).png)
 
 - **Adjust Cover Color**: Use the eyedropper or color picker to perfect the background match
 - **Adjust Opacity**: Slide the opacity control for better blending
@@ -93,7 +93,7 @@ A powerful web-based image text editor that allows you to easily edit and replac
 
 ### Step 5: Export
 
-![Export](<Image%20Text%20editor/images/Screenshot%20(160).png>)
+![Export](images/Screenshot%20(160).png)
 
 - Click **Save PNG** button (or press Ctrl+S)
 - Download your edited image in high quality
