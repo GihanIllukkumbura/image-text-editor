@@ -869,6 +869,10 @@
     if (!m) return '#000000';
     return '#' + m.slice(0, 3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
   }
+
+  // ===== AUTO-LOAD =====
+  // Removed auto-load - users must manually load an image
+  // App now starts with empty state showing "please enter image" message
 </script>
 
 </body>
