@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Text Editor — Enhanced</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden; height: 100vh;
+  }
+
+  /* ===== TOOLBAR ===== */
+  .toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    flex-wrap: wrap; position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  }
+  .toolbar button {
+    background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+    border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px;
+    transition: background 0.15s;
+  }
+  .toolbar button:hover { background: #45475a; }
+  .toolbar button.primary { background: #89b4fa; color: #1e1e2e; border-color: #89b4fa; }
+  .toolbar button.primary:hover { background: #74c7ec; }
+  .toolbar button.danger { background: #f38ba8; color: #1e1e2e; border-color: #f38ba8; }
+  .toolbar button.danger:hover { background: #eba0ac; }
+  .toolbar button.active { background: #a6e3a1; color: #1e1e2e; border-color: #a6e3a1; }
+  .toolbar label { font-size: 12px; display: flex; align-items: center; gap: 3px; }
+  .toolbar input[type="number"] { width: 48px; background: #313244; border: 1px solid #45475a; border-radius: 4px; color: #cdd6f4; padding: 3px; font-size: 12px; }
+  .toolbar input[type="color"] { width: 28px; height: 24px; border: 1px solid #45475a; border-radius: 4px; background: transparent; cursor: pointer; }
+  .toolbar select { background: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+  .toolbar .sep { width: 1px; height: 26px; background: #45475a; margin: 0 2px; }
+  .toolbar .tool-group { display: flex; align-items: center; gap: 4px; background: #11111b; border-radius: 6px; padding: 2px 4px; }
+  .toolbar .tool-group .tool-label { font-size: 10px; color: #6c7086; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
+
+  /* ===== WORKSPACE ===== */
+  .workspace {
+    margin-top: 46px; height: calc(100vh - 46px); overflow: auto;
+    display: flex; align-items: flex-start; justify-content: center; padding: 16px;
+  }
+  .canvas-wrap {
+    position: relative; display: inline-block; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .canvas-wrap img {
+    display: block; max-width: 90vw; max-height: 82vh; user-select: none; pointer-events: none;
+  }
+
+  /* ===== SELECTION RECTANGLE ===== */
+  .selection-rect {
+    position: absolute; border: 2px dashed #f9e2af; background: rgba(249,226,175,0.08);
+    pointer-events: none; z-index: 60;
+  }
+
+  /* ===== TEXT BOXES ===== */
+  .text-box {
+    position: absolute; cursor: move; user-select: none;
+    padding: 2px 4px; min-width: 20px; min-height: 16px;
+    border: 2px dashed transparent; border-radius: 2px;
+    transition: border-color 0.15s;
+    white-space: pre-wrap; word-break: break-word;
+    z-index: 50;
+  }
+  .text-box:hover { border-color: rgba(137,180,250,0.5); }
+  .text-box.selected { border-color: #89b4fa; box-shadow: 0 0 0 2px rgba(137,180,250,0.25); }
+  .text-box.editing { cursor: text; border-color: #a6e3a1; box-shadow: 0 0 0 2px rgba(166,227,161,0.25); }
+
+  .text-box .resize-handle {
+    position: absolute; bottom: -5px; right: -5px; width: 10px; height: 10px;
+    background: #89b4fa; border-radius: 2px; cursor: nwse-resize;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .text-box.selected .resize-handle, .text-box:hover .resize-handle { opacity: 1; }
+
+  /* Cover patch (opaque rectangle to hide original text) */
+  .cover-patch {
+    position: absolute; z-index: 40;
+  }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 80px 40px; color: #6c7086;
+  }
+  .empty-state .icon { font-size: 64px; opacity: 0.4; }
+  .empty-state p { font-size: 15px; }
+  .drop-zone {
+    border: 2px dashed #45475a; border-radius: 12px; padding: 40px 60px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #89b4fa; background: rgba(137,180,250,0.05); }
+
+  /* ===== COLOR PREVIEW ===== */
+  .color-preview {
+    width: 22px; height: 22px; border: 2px solid #585b70; border-radius: 4px;
+    display: inline-block; vertical-align: middle;
+  }
+
+  /* ===== HELP PANEL ===== */
+  .help-panel {
+    position: fixed; bottom: 12px; right: 12px; background: #181825;
+    border: 1px solid #313244; border-radius: 8px; padding: 10px 14px;
+    font-size: 11px; color: #6c7086; line-height: 1.7; z-index: 50;
+    max-width: 280px;
+  }
+  .help-panel kbd {
+    background: #313244; border: 1px solid #45475a; border-radius: 3px;
+    padding: 1px 4px; font-size: 10px; color: #a6adc8;
+  }
+
+  /* ===== STATUS BAR ===== */
+  .status-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 24px;
+    background: #181825; border-top: 1px solid #313244;
+    display: flex; align-items: center; padding: 0 16px;
+    font-size: 11px; color: #6c7086; z-index: 100; gap: 16px;
+  }
+
+  /* cursor styles */
+  .canvas-wrap.mode-select { cursor: crosshair; }
+  .canvas-wrap.mode-eyedropper { cursor: crosshair; }
+  .canvas-wrap.mode-pointer { cursor: default; }
+</style>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<div class="toolbar" id="toolbar">
+  <button class="primary" onclick="document.getElementById('fileInput').click()">&#128194; Load</button>
+  <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
+  <div class="sep"></div>
+
+  <!-- TOOLS -->
+  <div class="tool-group">
+    <span class="tool-label">Tool:</span>
+    <button id="btnPointer" class="active" onclick="setTool('pointer')" title="Pointer — click/drag text boxes">&#128433; Pointer</button>
+    <button id="btnSelect" onclick="setTool('select')" title="Select Area — drag to create editable text region">&#9986; Select Area</button>
+    <button id="btnEyedrop" onclick="setTool('eyedropper')" title="Eyedropper — click to pick a color from image">&#128167; Pick Color</button>
+  </div>
+  <div class="sep"></div>
+  <button onclick="addText()">&#10133; Add Text</button>
+  <div class="sep"></div>
+
+  <label>Font:
+    <select id="fontFamily" onchange="applyStyle()">
+      <option value="Segoe UI">Segoe UI</option>
+      <option value="Arial">Arial</option>
+      <option value="Times New Roman">Times New Roman</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Georgia">Georgia</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Impact">Impact</option>
+      <option value="Comic Sans MS">Comic Sans MS</option>
+      <option value="Geometric Sans-Serif">Geometric Sans-Serif</option>
+    </select>
+  </label>
+  <label>Size: <input type="number" id="fontSize" value="14" min="6" max="200" onchange="applyStyle()"></label>
+  <label>Color: <input type="color" id="fontColor" value="#000000" onchange="applyStyle()"></label>
+  <div class="sep"></div>
+  <label>Cover: <input type="color" id="coverColor" value="#ffffff"> <span id="coverPreview" class="color-preview" style="background:#ffffff;"></span></label>
+  <label>
+    <input type="range" id="coverOpacity" min="0" max="100" value="100" style="width:60px;" oninput="document.getElementById('opacVal').textContent=this.value+'%'; applyStyle();">
+    <span id="opacVal" style="font-size:11px; min-width:30px;">100%</span>
+  </label>
+  <div class="sep"></div>
+  <button onclick="toggleBold()"><b>B</b></button>
+  <button onclick="toggleItalic()"><i>I</i></button>
+  <button onclick="toggleUnderline()"><u>U</u></button>
+  <div class="sep"></div>
+  <button onclick="duplicateSelected()">&#128203;</button>
+  <button class="danger" onclick="deleteSelected()">&#128465;</button>
+  <div class="sep"></div>
+  <button class="primary" onclick="exportImage()">&#128190; Save PNG</button>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace" id="workspace">
+  <div class="empty-state" id="emptyState">
+    <div class="icon">&#128444;&#65039;</div>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <p><strong>Please load an image to start editing</strong></p>
+      <p style="font-size:13px; margin-top:8px;">Drop image here or click to browse</p>
+      <p style="font-size:12px; margin-top:4px; color:#6c7086;">Supports JPG, PNG, GIF, WebP</p>
+    </div>
+  </div>
+  <div class="canvas-wrap mode-pointer" id="canvasWrap" style="display:none;">
+    <img id="baseImage" alt="Base image">
+    <!-- hidden canvas for color picking -->
+    <canvas id="pickCanvas" style="display:none;"></canvas>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span id="statusTool">Tool: Pointer</span>
+  <span id="statusPos"></span>
+  <span id="statusInfo"></span>
+</div>
+
+<!-- HELP -->
+<div class="help-panel">
+  <strong style="color:#cdd6f4;">How to Edit Text on Image</strong><br>
+  1. Select <kbd>&#9986; Select Area</kbd> tool<br>
+  2. <kbd>Click + drag</kbd> over text to select<br>
+  3. Area is covered &amp; text box appears — type new text<br>
+  <hr style="border-color:#313244; margin:4px 0;">
+  <kbd>&#128167; Pick Color</kbd> — sample color from image<br>
+  <kbd>Double-click</kbd> text box — edit text<br>
+  <kbd>Click</kbd> text box — select (must select before deleting)<br>
+  <kbd>Delete</kbd> or <kbd>&#128465;</kbd> button — remove selected text<br>
+  <kbd>Ctrl+D</kbd> — duplicate<br>
+  <kbd>Ctrl+S</kbd> — save as PNG<br>
+  <kbd>Escape</kbd> — deselect / back to pointer<br>
+  <kbd>Ctrl+Z</kbd> — undo last action
+</div>
+
+<script>
+  // ===== STATE =====
+  let selectedBox = null;
+  let textBoxes = [];
+  let coverPatches = [];
+  let idCounter = 0;
+  let currentTool = 'pointer'; // 'pointer' | 'select' | 'eyedropper'
+  let undoStack = [];
+  let pickCanvasReady = false;
+
+  // ===== TOOL SWITCHING =====
+  function setTool(tool) {
+    currentTool = tool;
+    const wrap = document.getElementById('canvasWrap');
+    wrap.classList.remove('mode-pointer', 'mode-select', 'mode-eyedropper');
+    wrap.classList.add('mode-' + tool);
+
+    document.getElementById('btnPointer').classList.toggle('active', tool === 'pointer');
+    document.getElementById('btnSelect').classList.toggle('active', tool === 'select');
+    document.getElementById('btnEyedrop').classList.toggle('active', tool === 'eyedropper');
+
+    const names = { pointer: 'Pointer', select: 'Select Area', eyedropper: 'Pick Color' };
+    document.getElementById('statusTool').textContent = 'Tool: ' + names[tool];
+  }
+
+  // ===== DRAG & DROP IMAGE =====
+  const dropZone = document.getElementById('dropZone');
+  document.addEventListener('dragover', e => { e.preventDefault(); dropZone?.classList.add('dragover'); });
+  document.addEventListener('dragleave', () => dropZone?.classList.remove('dragover'));
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone?.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].type.startsWith('image/')) {
+      loadImageFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  function loadImage(event) {
+    if (event.target.files.length > 0) loadImageFile(event.target.files[0]);
+  }
+
+  function loadImageFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      setImageSrc(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setImageSrc(src) {
+    const img = document.getElementById('baseImage');
+    img.src = src;
+    img.onload = () => {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('canvasWrap').style.display = 'inline-block';
+      buildPickCanvas();
+    };
+  }
+
+  // Build a hidden canvas with the image for pixel color picking
+  function buildPickCanvas() {
+    const img = document.getElementById('baseImage');
+    const c = document.getElementById('pickCanvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    pickCanvasReady = true;
+  }
+
+  // ===== GET COLOR AT IMAGE PIXEL =====
+  function getColorAt(displayX, displayY) {
+    if (!pickCanvasReady) return '#ffffff';
+    const img = document.getElementById('baseImage');
+    const scaleX = img.naturalWidth / img.offsetWidth;
+    const scaleY = img.naturalHeight / img.offsetHeight;
+    const px = Math.round(displayX * scaleX);
+    const py = Math.round(displayY * scaleY);
+    const ctx = document.getElementById('pickCanvas').getContext('2d', { willReadFrequently: true });
+    const d = ctx.getImageData(px, py, 1, 1).data;
+    return '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Sample average color in a region (from edges to detect background)
+  function getAvgColorInRect(x, y, w, h) {
+    if (!pickCanvasReady) return '#ffffff';
+    const img = document.getElementById('baseImage');
+    const scaleX = img.naturalWidth / img.offsetWidth;
+    const scaleY = img.naturalHeight / img.offsetHeight;
+    const px = Math.round(x * scaleX), py = Math.round(y * scaleY);
+    const pw = Math.max(1, Math.round(w * scaleX)), ph = Math.max(1, Math.round(h * scaleY));
+    const ctx = document.getElementById('pickCanvas').getContext('2d', { willReadFrequently: true });
+    const data = ctx.getImageData(px, py, pw, ph).data;
+    let r = 0, g = 0, b = 0, count = 0;
+    // Sample edges (top, bottom, left, right strips — 3px deep) to get background color
+    for (let i = 0; i < data.length; i += 4) {
+      const pixIdx = i / 4;
+      const col = pixIdx % pw;
+      const row = Math.floor(pixIdx / pw);
+      if (row < 3 || row >= ph - 3 || col < 3 || col >= pw - 3) {
+        r += data[i]; g += data[i+1]; b += data[i+2]; count++;
+      }
+    }
+    if (count === 0) return '#ffffff';
+    r = Math.round(r / count); g = Math.round(g / count); b = Math.round(b / count);
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  // ===== AREA SELECTION (DRAW RECTANGLE) =====
+  let isSelecting = false;
+  let selStartX = 0, selStartY = 0;
+  let selRect = null;
+
+  function onCanvasMouseDown(e) {
+    const wrap = document.getElementById('canvasWrap');
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (currentTool === 'eyedropper') {
+      e.preventDefault();
+      const color = getColorAt(x, y);
+      document.getElementById('coverColor').value = color;
+      document.getElementById('coverPreview').style.background = color;
+      document.getElementById('statusInfo').textContent = 'Picked: ' + color;
+      return;
+    }
+
+    if (currentTool === 'select') {
+      // Only start if clicking on image area (not on a text box)
+      if (e.target.id !== 'baseImage' && e.target.id !== 'canvasWrap') return;
+      e.preventDefault();
+      isSelecting = true;
+      selStartX = x;
+      selStartY = y;
+      // Create selection rectangle
+      selRect = document.createElement('div');
+      selRect.className = 'selection-rect';
+      selRect.style.left = x + 'px';
+      selRect.style.top = y + 'px';
+      selRect.style.width = '0px';
+      selRect.style.height = '0px';
+      wrap.appendChild(selRect);
+      return;
+    }
+
+    // Pointer tool — click on image deselects
+    if (currentTool === 'pointer') {
+      if (e.target.id === 'baseImage' || e.target.id === 'canvasWrap') {
+        deselectAll();
+      }
+    }
+  }
+
+  function onCanvasMouseMove(e) {
+    const wrap = document.getElementById('canvasWrap');
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    document.getElementById('statusPos').textContent = '(' + Math.round(x) + ', ' + Math.round(y) + ')';
+
+    if (currentTool === 'eyedropper') {
+      const color = getColorAt(x, y);
+      document.getElementById('statusInfo').textContent = 'Color: ' + color;
+    }
+
+    if (isSelecting && selRect) {
+      const sx = Math.min(selStartX, x);
+      const sy = Math.min(selStartY, y);
+      const sw = Math.abs(x - selStartX);
+      const sh = Math.abs(y - selStartY);
+      selRect.style.left = sx + 'px';
+      selRect.style.top = sy + 'px';
+      selRect.style.width = sw + 'px';
+      selRect.style.height = sh + 'px';
+    }
+  }
+
+  function onCanvasMouseUp(e) {
+    if (!isSelecting || !selRect) return;
+    isSelecting = false;
+    const wrap = document.getElementById('canvasWrap');
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const sx = Math.min(selStartX, x);
+    const sy = Math.min(selStartY, y);
+    const sw = Math.abs(x - selStartX);
+    const sh = Math.abs(y - selStartY);
+
+    // Remove selection rectangle
+    selRect.remove();
+    selRect = null;
+
+    // Minimum size check
+    if (sw < 10 || sh < 5) return;
+
+    // Auto-detect background color from the selected region edges
+    const bgColor = getAvgColorInRect(sx, sy, sw, sh);
+
+    // Create a cover patch to hide original text
+    const patch = document.createElement('div');
+    patch.className = 'cover-patch';
+    patch.style.left = sx + 'px';
+    patch.style.top = sy + 'px';
+    patch.style.width = sw + 'px';
+    patch.style.height = sh + 'px';
+    patch.style.background = bgColor;
+    const opacity = parseInt(document.getElementById('coverOpacity').value) / 100;
+    patch.style.opacity = opacity;
+    patch.dataset.patchColor = bgColor;
+    wrap.appendChild(patch);
+    coverPatches.push(patch);
+
+    // Update the cover color picker to show detected color
+    document.getElementById('coverColor').value = bgColor;
+    document.getElementById('coverPreview').style.background = bgColor;
+
+    // Create text box on top of the cover patch
+    createTextBoxAt(sx, sy, sw, sh, bgColor);
+
+    // Save undo state
+    pushUndo();
+
+    // Auto-switch back to pointer after creating
+    setTool('pointer');
+  }
+
+  // Wire up canvas events
+  document.getElementById('canvasWrap').addEventListener('mousedown', onCanvasMouseDown);
+  document.addEventListener('mousemove', onCanvasMouseMove);
+  document.addEventListener('mouseup', onCanvasMouseUp);
+
+  // ===== CREATE TEXT BOX =====
+  function createTextBoxAt(x, y, w, h, bgColor) {
+    const wrap = document.getElementById('canvasWrap');
+    const box = document.createElement('div');
+    box.className = 'text-box';
+    box.id = 'tb-' + (++idCounter);
+
+    // Estimate font size based on selection height
+    const estimatedFontSize = Math.max(8, Math.min(60, Math.round(h * 0.65)));
+
+    box.innerHTML = '<span class="text-content">Type here</span><div class="resize-handle"></div>';
+    box.style.left = x + 'px';
+    box.style.top = y + 'px';
+    box.style.width = w + 'px';
+    box.style.minHeight = h + 'px';
+    box.style.fontSize = estimatedFontSize + 'px';
+    box.style.fontFamily = document.getElementById('fontFamily').value;
+    box.style.color = document.getElementById('fontColor').value;
+    box.style.lineHeight = '1.2';
+    box.dataset.bold = 'false';
+    box.dataset.italic = 'false';
+    box.dataset.underline = 'false';
+    box.dataset.bgEnabled = 'false';
+    box.dataset.coverPatchId = coverPatches.length - 1; // link to cover patch
+
+    // Events
+    box.addEventListener('mousedown', e => onBoxMouseDown(e, box));
+    box.addEventListener('dblclick', () => startEditing(box));
+    box.querySelector('.resize-handle').addEventListener('mousedown', e => onResizeStart(e, box));
+
+    wrap.appendChild(box);
+    textBoxes.push(box);
+    selectBox(box);
+    startEditing(box); // immediately enter editing mode
+  }
+
+  function addText() {
+    if (document.getElementById('canvasWrap').style.display === 'none') {
+      alert('Please load an image first.');
+      return;
+    }
+    const wrap = document.getElementById('canvasWrap');
+    const box = document.createElement('div');
+    box.className = 'text-box';
+    box.id = 'tb-' + (++idCounter);
+    box.innerHTML = '<span class="text-content">Edit me</span><div class="resize-handle"></div>';
+    box.style.left = '40px';
+    box.style.top = '40px';
+    box.style.fontSize = document.getElementById('fontSize').value + 'px';
+    box.style.fontFamily = document.getElementById('fontFamily').value;
+    box.style.color = document.getElementById('fontColor').value;
+    box.dataset.bold = 'false';
+    box.dataset.italic = 'false';
+    box.dataset.underline = 'false';
+
+    box.addEventListener('mousedown', e => onBoxMouseDown(e, box));
+    box.addEventListener('dblclick', () => startEditing(box));
+    box.querySelector('.resize-handle').addEventListener('mousedown', e => onResizeStart(e, box));
+
+    wrap.appendChild(box);
+    textBoxes.push(box);
+    selectBox(box);
+    pushUndo();
+  }
+
+  // ===== SELECT =====
+  function selectBox(box) {
+    if (selectedBox && selectedBox !== box) {
+      selectedBox.classList.remove('selected');
+      stopEditing(selectedBox);
+    }
+    selectedBox = box;
+    box.classList.add('selected');
+    document.getElementById('fontSize').value = parseInt(box.style.fontSize) || 14;
+    document.getElementById('fontFamily').value = box.style.fontFamily.replace(/"/g, '') || 'Segoe UI';
+    document.getElementById('fontColor').value = rgbToHex(box.style.color) || '#000000';
+    if (box.dataset.bgColor) {
+      document.getElementById('coverColor').value = box.dataset.bgColor;
+      document.getElementById('coverPreview').style.background = box.dataset.bgColor;
+    }
+  }
+
+  function deselectAll() {
+    if (selectedBox) {
+      selectedBox.classList.remove('selected');
+      stopEditing(selectedBox);
+      selectedBox = null;
+    }
+  }
+
+  // ===== EDITING =====
+  function startEditing(box) {
+    const content = box.querySelector('.text-content');
+    content.contentEditable = 'true';
+    content.focus();
+    box.classList.add('editing');
+    box.style.cursor = 'text';
+    const range = document.createRange();
+    range.selectNodeContents(content);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function stopEditing(box) {
+    if (!box) return;
+    const content = box.querySelector('.text-content');
+    if (content) content.contentEditable = 'false';
+    box.classList.remove('editing');
+    box.style.cursor = 'move';
+  }
+
+  // ===== DRAG =====
+  function onBoxMouseDown(e, box) {
+    if (e.target.classList.contains('resize-handle')) return;
+    if (box.classList.contains('editing')) return;
+    if (currentTool !== 'pointer') return; // only drag in pointer mode
+    e.preventDefault();
+    e.stopPropagation();
+    selectBox(box);
+
+    const startX = e.clientX, startY = e.clientY;
+    const origLeft = parseInt(box.style.left) || 0;
+    const origTop = parseInt(box.style.top) || 0;
+
+    // If there's a linked cover patch, move it too
+    const patchIdx = box.dataset.coverPatchId;
+    let patch = null, patchOrigLeft = 0, patchOrigTop = 0;
+    if (patchIdx !== undefined && coverPatches[patchIdx]) {
+      patch = coverPatches[patchIdx];
+      patchOrigLeft = parseInt(patch.style.left) || 0;
+      patchOrigTop = parseInt(patch.style.top) || 0;
+    }
+
+    function onMove(e2) {
+      const dx = e2.clientX - startX;
+      const dy = e2.clientY - startY;
+      box.style.left = (origLeft + dx) + 'px';
+      box.style.top = (origTop + dy) + 'px';
+      if (patch) {
+        patch.style.left = (patchOrigLeft + dx) + 'px';
+        patch.style.top = (patchOrigTop + dy) + 'px';
+      }
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  // ===== RESIZE =====
+  function onResizeStart(e, box) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const origW = box.offsetWidth;
+    const origH = box.offsetHeight;
+
+    function onMove(e2) {
+      const dw = e2.clientX - startX;
+      const dh = e2.clientY - startY;
+      box.style.width = Math.max(30, origW + dw) + 'px';
+      box.style.minHeight = Math.max(16, origH + dh) + 'px';
+      // Also adjust linked cover patch
+      const patchIdx = box.dataset.coverPatchId;
+      if (patchIdx !== undefined && coverPatches[patchIdx]) {
+        coverPatches[patchIdx].style.width = Math.max(30, origW + dw) + 'px';
+        coverPatches[patchIdx].style.height = Math.max(16, origH + dh) + 'px';
+      }
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  // ===== APPLY STYLE =====
+  function applyStyle() {
+    if (!selectedBox) return;
+    selectedBox.style.fontSize = document.getElementById('fontSize').value + 'px';
+    selectedBox.style.fontFamily = document.getElementById('fontFamily').value;
+    selectedBox.style.color = document.getElementById('fontColor').value;
+
+    // Update linked cover patch color & opacity
+    const patchIdx = selectedBox.dataset.coverPatchId;
+    if (patchIdx !== undefined && coverPatches[patchIdx]) {
+      const patch = coverPatches[patchIdx];
+      const newColor = document.getElementById('coverColor').value;
+      const opacity = parseInt(document.getElementById('coverOpacity').value) / 100;
+      patch.style.background = newColor;
+      patch.style.opacity = opacity;
+      patch.dataset.patchColor = newColor;
+      document.getElementById('coverPreview').style.background = newColor;
+    }
+  }
+
+  function toggleBold() {
+    if (!selectedBox) return;
+    const isBold = selectedBox.dataset.bold === 'true';
+    selectedBox.dataset.bold = (!isBold).toString();
+    selectedBox.style.fontWeight = isBold ? 'normal' : 'bold';
+  }
+  function toggleItalic() {
+    if (!selectedBox) return;
+    const is = selectedBox.dataset.italic === 'true';
+    selectedBox.dataset.italic = (!is).toString();
+    selectedBox.style.fontStyle = is ? 'normal' : 'italic';
+  }
+  function toggleUnderline() {
+    if (!selectedBox) return;
+    const is = selectedBox.dataset.underline === 'true';
+    selectedBox.dataset.underline = (!is).toString();
+    selectedBox.style.textDecoration = is ? 'none' : 'underline';
+  }
+
+  // ===== DELETE / DUPLICATE =====
+  function deleteSelected() {
+    if (!selectedBox) {
+      alert('Please select a text box first.');
+      return;
+    }
+    // Stop editing mode first if active
+    if (selectedBox.classList.contains('editing')) {
+      stopEditing(selectedBox);
+    }
+    pushUndo();
+    // Also remove linked cover patch
+    const patchIdx = selectedBox.dataset.coverPatchId;
+    if (patchIdx !== undefined && coverPatches[patchIdx]) {
+      coverPatches[patchIdx].remove();
+      coverPatches[patchIdx] = null;
+    }
+    selectedBox.remove();
+    textBoxes = textBoxes.filter(b => b !== selectedBox);
+    selectedBox = null;
+  }
+
+  function duplicateSelected() {
+    if (!selectedBox) return;
+    const clone = selectedBox.cloneNode(true);
+    clone.id = 'tb-' + (++idCounter);
+    clone.style.left = (parseInt(selectedBox.style.left) + 20) + 'px';
+    clone.style.top = (parseInt(selectedBox.style.top) + 20) + 'px';
+    clone.classList.remove('selected', 'editing');
+    const content = clone.querySelector('.text-content');
+    if (content) content.contentEditable = 'false';
+    // Remove patch link from clone (it gets its own)
+    delete clone.dataset.coverPatchId;
+
+    clone.addEventListener('mousedown', e => onBoxMouseDown(e, clone));
+    clone.addEventListener('dblclick', () => startEditing(clone));
+    clone.querySelector('.resize-handle').addEventListener('mousedown', e => onResizeStart(e, clone));
+
+    document.getElementById('canvasWrap').appendChild(clone);
+    textBoxes.push(clone);
+    selectBox(clone);
+    pushUndo();
+  }
+
+  // ===== UNDO =====
+  function pushUndo() {
+    const wrap = document.getElementById('canvasWrap');
+    undoStack.push(wrap.innerHTML);
+    if (undoStack.length > 30) undoStack.shift();
+  }
+
+  function undo() {
+    if (undoStack.length === 0) return;
+    const wrap = document.getElementById('canvasWrap');
+    wrap.innerHTML = undoStack.pop();
+    // Re-wire events
+    selectedBox = null;
+    textBoxes = [];
+    coverPatches = [];
+    wrap.querySelectorAll('.text-box').forEach(box => {
+      textBoxes.push(box);
+      box.addEventListener('mousedown', e => onBoxMouseDown(e, box));
+      box.addEventListener('dblclick', () => startEditing(box));
+      const rh = box.querySelector('.resize-handle');
+      if (rh) rh.addEventListener('mousedown', e => onResizeStart(e, box));
+    });
+    wrap.querySelectorAll('.cover-patch').forEach(p => coverPatches.push(p));
+    // Re-build pick canvas (image still there)
+    const img = document.getElementById('baseImage');
+    if (img && img.src) {
+      buildPickCanvas();
+    }
+  }
+
+  // ===== EXPORT =====
+  function exportImage() {
+    const img = document.getElementById('baseImage');
+    if (!img.src) return;
+
+    deselectAll();
+    // Hide UI elements
+    document.querySelectorAll('.text-box').forEach(b => {
+      b.style.borderColor = 'transparent';
+      const rh = b.querySelector('.resize-handle');
+      if (rh) rh.style.display = 'none';
+    });
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const scaleX = img.naturalWidth / img.offsetWidth;
+    const scaleY = img.naturalHeight / img.offsetHeight;
+
+    ctx.drawImage(img, 0, 0);
+
+    // Draw cover patches first
+    coverPatches.forEach(patch => {
+      if (!patch) return;
+      const x = (parseInt(patch.style.left) || 0) * scaleX;
+      const y = (parseInt(patch.style.top) || 0) * scaleY;
+      const w = (parseInt(patch.style.width) || 0) * scaleX;
+      const h = (parseInt(patch.style.height) || 0) * scaleY;
+      const opacity = parseFloat(patch.style.opacity) || 1;
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = patch.dataset.patchColor || '#ffffff';
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+    });
+
+    // Draw text boxes
+    textBoxes.forEach(box => {
+      const content = box.querySelector('.text-content');
+      if (!content) return;
+
+      const x = (parseInt(box.style.left) || 0) * scaleX;
+      const y = (parseInt(box.style.top) || 0) * scaleY;
+      const fontSize = (parseInt(box.style.fontSize) || 14) * scaleX;
+      const fontFamily = box.style.fontFamily || 'Segoe UI';
+      const color = box.style.color || '#000000';
+      const bold = box.dataset.bold === 'true' ? 'bold ' : '';
+      const italic = box.dataset.italic === 'true' ? 'italic ' : '';
+
+      ctx.font = italic + bold + fontSize + 'px ' + fontFamily;
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'top';
+
+      const lines = content.innerText.split('\n');
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x + 4 * scaleX, y + 2 * scaleY + i * fontSize * 1.2);
+      });
+
+      if (box.dataset.underline === 'true') {
+        lines.forEach((line, i) => {
+          const m = ctx.measureText(line);
+          const ly = y + 2 * scaleY + (i + 1) * fontSize * 1.2;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = Math.max(1, fontSize * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(x + 4 * scaleX, ly);
+          ctx.lineTo(x + 4 * scaleX + m.width, ly);
+          ctx.stroke();
+        });
+      }
+    });
+
+    const link = document.createElement('a');
+    link.download = 'edited-image.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    // Restore
+    document.querySelectorAll('.text-box .resize-handle').forEach(h => h.style.display = '');
+  }
+
+  // ===== KEYBOARD SHORTCUTS =====
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      deselectAll();
+      setTool('pointer');
+    }
+    if (e.key === 'Delete') {
+      // Only delete text box if not actively editing text content
+      if (selectedBox && !selectedBox.classList.contains('editing')) {
+        e.preventDefault();
+        deleteSelected();
+      }
+    }
+    if (e.ctrlKey && e.key === 'd') { e.preventDefault(); duplicateSelected(); }
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); exportImage(); }
+    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+  });
+
+  // Click on workspace background deselects
+  document.getElementById('workspace').addEventListener('mousedown', e => {
+    if (e.target.id === 'workspace') deselectAll();
+  });
+
+  // ===== COVER COLOR PICKER UPDATE =====
+  document.getElementById('coverColor').addEventListener('input', function() {
+    document.getElementById('coverPreview').style.background = this.value;
+    if (selectedBox) {
+      const patchIdx = selectedBox.dataset.coverPatchId;
+      if (patchIdx !== undefined && coverPatches[patchIdx]) {
+        coverPatches[patchIdx].style.background = this.value;
+        coverPatches[patchIdx].dataset.patchColor = this.value;
+      }
+    }
+  });
+
+  // ===== HELPER =====
+  function rgbToHex(rgb) {
+    if (!rgb) return '#000000';
+    if (rgb.startsWith('#')) return rgb;
+    const m = rgb.match(/(\d+)/g);
+    if (!m) return '#000000';
+    return '#' + m.slice(0, 3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+  }
+
+  // ===== AUTO-LOAD =====
+  // Removed auto-load - users must manually load an image
+  // App now starts with empty state showing "please enter image" message
+</script>
+
+</body>
+</html>
